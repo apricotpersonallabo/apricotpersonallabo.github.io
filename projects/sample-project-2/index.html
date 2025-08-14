@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sample Project 2</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="../../assets/css/base.css">
+  <link rel="stylesheet" href="../../assets/css/layout.css">
+  <link rel="stylesheet" href="../../assets/css/components.css">
+</head>
+
+<body>
+    <div class="container">
+    <h1>CSVプレビュー（先頭5行）</h1>
+    <p>アップロードまたはドラッグ＆ドロップしたCSVの<strong>先頭5行のみ</strong>をパースして表で表示します。</p>
+
+    <div class="controls">
+      <div>
+        <strong>区切り文字</strong>
+        <label><input type="radio" name="delimiter" value="," checked> カンマ ( , )</label>
+        <label><input type="radio" name="delimiter" value="\t"> タブ ( Tab )</label>
+      </div>
+      <div>
+        <label>
+          <input type="checkbox" id="use-header" checked>
+          一行目を列名として扱う
+        </label>
+      </div>
+      <div>
+        <label for="file">ファイル選択</label>
+        <input type="file" id="file" accept=".csv,text/csv,.tsv,text/tab-separated-values,text/plain" />
+      </div>
+    </div>
+
+    <div id="dropzone" aria-label="CSVファイルのドラッグ＆ドロップ領域" style="border:2px dashed #999; padding:16px;">
+      <strong>ドラッグ＆ドロップ対応</strong>
+      <p>ここにCSV/TSVファイルをドロップ、または上の「ファイル選択」から選択してください。</p>
+      <p><em>ローカル処理: ファイルはブラウザ内でのみ処理されます。</em></p>
+    </div>
+
+    <div id="status">ファイル未選択</div>
+
+    <div id="table-wrapper"></div>
+
+    <div id="error" style="color:#c00; font-weight:bold;"></div>
+
+    <p>対応仕様: RFC 4180 準拠の引用 (二重引用符) をサポート。引用内の改行・区切り文字も解釈します。</p>
+  </div>
+
+  <script>
+    // ====== 設定 ======
+    const MAX_RECORDS = 5;
+
+    // ====== ユーティリティ（できるだけ関数型） ======
+    const qs = (sel, root = document) => root.querySelector(sel);
+    const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+    const getDelimiter = () => (qs('input[name="delimiter"]:checked')?.value ?? ',');
+    const getUseHeader = () => qs('#use-header')?.checked ?? true;
+
+    const setText = (el, text) => (el.textContent = text, el);
+    const setHTML = (el, html) => (el.innerHTML = html, el);
+    const clear = (el) => setHTML(el, '');
+
+    const showError = (msg) => setText(qs('#error'), msg);
+    const clearError = () => showError('');
+
+    const status = (msg) => setText(qs('#status'), msg);
+
+    const safeBOMStrip = (s) => (s && s.charCodeAt(0) === 0xFEFF) ? s.slice(1) : s;
+
+    const formatParseError = (err) => {
+      const line = err?.line != null ? `${err.line}行目` : '';
+      const col = err?.column != null ? `${err.column}列目` : '';
+      const at  = (line || col) ? `（${[line, col].filter(Boolean).join('、')}）` : '';
+      return `パースエラー: ${err?.message || '不明なエラー'}${at}`;
+    };
+
+    // ====== 純関数: CSV/TSVパース（先頭Nレコード） ======
+    const parseDelimitedLimited = (text, delim, maxRecords) => {
+      const push = (arr, x) => (arr.concat([x]));
+
+      const loop = (i, ctx) => {
+        const { len, rows, row, field, inQuotes, justClosedQuote, recordNo, colNo } = ctx;
+        if (rows.length >= maxRecords || i >= len) return finish(i, ctx);
+        const ch = text[i];
+
+        if (inQuotes) {
+          if (ch === '"') {
+            if (i + 1 < len && text[i + 1] === '"') {
+              return loop(i + 2, { ...ctx, field: field + '"' });
+            } else {
+              return loop(i + 1, { ...ctx, inQuotes: false, justClosedQuote: true });
+            }
+          }
+          return loop(i + 1, { ...ctx, field: field + ch });
+        }
+
+        if (justClosedQuote) {
+          if (ch === delim) {
+            return loop(i + 1, { ...ctx, row: push(row, field), field: '', colNo: colNo + 1, justClosedQuote: false });
+          }
+          if (ch === '\n' || ch === '\r') {
+            const row2 = push(row, field);
+            const rows2 = push(rows, row2);
+            const skip = (ch === '\r' && i + 1 < len && text[i + 1] === '\n') ? 1 : 0;
+            return loop(i + 1 + skip, { ...ctx, row: [], rows: rows2, field: '', recordNo: recordNo + 1, colNo: 1, justClosedQuote: false });
+          }
+          throw { message: '閉じ引用符の直後に不正な文字があります', line: recordNo, column: colNo };
+        }
+
+        if (ch === '"') return loop(i + 1, { ...ctx, inQuotes: true });
+        if (ch === delim) return loop(i + 1, { ...ctx, row: push(row, field), field: '', colNo: colNo + 1 });
+        if (ch === '\n' || ch === '\r') {
+          const rows2 = push(rows, push(row, field));
+          const skip = (ch === '\r' && i + 1 < len && text[i + 1] === '\n') ? 1 : 0;
+          return loop(i + 1 + skip, { ...ctx, rows: rows2, row: [], field: '', recordNo: recordNo + 1, colNo: 1 });
+        }
+        return loop(i + 1, { ...ctx, field: field + ch });
+      };
+
+      const finish = (i, ctx) => {
+        const { rows, row, field, inQuotes, justClosedQuote } = ctx;
+        if (rows.length >= maxRecords) return rows;
+        if (inQuotes) throw { message: '引用符が閉じられていません', line: ctx.recordNo, column: ctx.colNo };
+        if (i >= ctx.len) {
+          if (justClosedQuote) {
+            return rows.concat([ row.concat([field]) ]);
+          }
+          if (field.length > 0 || row.length > 0) {
+            return rows.concat([ row.concat([field]) ]).slice(0, maxRecords);
+          }
+        }
+        return rows.slice(0, maxRecords);
+      };
+
+      return loop(0, { len: text.length, rows: [], row: [], field: '', inQuotes: false, justClosedQuote: false, recordNo: 1, colNo: 1 });
+    };
+
+    // ====== 純関数: Tableノード構築（border表示のため属性border=1を付与） ======
+    const buildTableNode = (rows, useHeader) => {
+      const el = document.createElement('table');
+      el.setAttribute('border', '1');
+
+      const toCells = (tag) => (row) => row.map((v) => { const c = document.createElement(tag); c.textContent = v; return c; });
+      const toRow = (tag) => (row) => { const tr = document.createElement('tr'); toCells(tag)(row).forEach((c) => tr.appendChild(c)); return tr; };
+
+      if (useHeader && rows.length) {
+        const thead = document.createElement('thead');
+        thead.appendChild(toRow('th')(rows[0]));
+        el.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        rows.slice(1).map(toRow('td')).forEach((tr) => tbody.appendChild(tr));
+        el.appendChild(tbody);
+      } else {
+        const tbody = document.createElement('tbody');
+        rows.map(toRow('td')).forEach((tr) => tbody.appendChild(tr));
+        el.appendChild(tbody);
+      }
+      return el;
+    };
+
+    // ====== 副作用: DOM反映パイプライン ======
+    const render = ({ text, delim, useHeader }) => {
+      clearError();
+      const wrap = qs('#table-wrapper');
+      clear(wrap);
+      if (!text) return status('ファイル未選択');
+      try {
+        const rows = parseDelimitedLimited(text, delim, MAX_RECORDS);
+        if (!rows.length) return status('データがありません。');
+        wrap.appendChild(buildTableNode(rows, useHeader));
+        status(`表示中: 先頭 ${rows.length} 行 (プレビュー)`);
+      } catch (e) {
+        showError(formatParseError(e));
+      }
+    };
+
+    // ====== ファイル読み込み（関数型スタイルに寄せる） ======
+    const readFileAsText = (file) => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('ファイル読み込みに失敗しました'));
+      reader.readAsText(file, 'utf-8');
+    });
+
+    // ====== メイン（最小限の状態と合成） ======
+    const main = () => {
+      let state = { text: '', delim: getDelimiter(), useHeader: getUseHeader() };
+      const setState = (patch) => (state = { ...state, ...patch }, render(state));
+
+      // 入力イベント
+      qs('#file').addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        readFileAsText(file)
+          .then(safeBOMStrip)
+          .then((txt) => (status(`読み込み完了: ${file.name} (${new Intl.NumberFormat().format(file.size)} bytes)`), txt))
+          .then((txt) => setState({ text: txt }))
+          .catch((err) => showError(String(err?.message || err)));
+      });
+
+      // ドラッグ＆ドロップ（装飾はstyle属性で最小限）
+      const dz = qs('#dropzone');
+      const noDefault = (fn) => (ev) => (ev.preventDefault(), ev.stopPropagation(), fn(ev));
+      const setStyle = (hover) => dz.setAttribute('style', `border:2px dashed ${hover? '#3b82f6':'#999'}; padding:16px; background:${hover? '#f0f7ff':'transparent'};`);
+
+      ['dragenter','dragover'].forEach((t) => dz.addEventListener(t, noDefault(() => setStyle(true))));
+      ['dragleave','drop'].forEach((t) => dz.addEventListener(t, noDefault(() => setStyle(false))));
+      dz.addEventListener('drop', noDefault((e) => {
+        const file = e.dataTransfer?.files?.[0];
+        if (!file) return;
+        readFileAsText(file)
+          .then(safeBOMStrip)
+          .then((txt) => (status(`読み込み完了: ${file.name} (${new Intl.NumberFormat().format(file.size)} bytes)`), txt))
+          .then((txt) => setState({ text: txt }))
+          .catch((err) => showError(String(err?.message || err)));
+      }));
+
+      // オプション切替
+      qsa('input[name="delimiter"]').forEach((r) => r.addEventListener('change', () => setState({ delim: getDelimiter() })));
+      qs('#use-header').addEventListener('change', () => setState({ useHeader: getUseHeader() }));
+
+      // 初期描画
+      render(state);
+    };
+
+    // 起動
+    main();
+  </script>
+  <script src="assets/js/app.js"></script>
+  <script type="module" src="../../assets/js/partials.js"></script>
+</body>
+
+</html>

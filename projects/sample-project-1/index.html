@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sample Project 1</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="../../assets/css/base.css">
+  <link rel="stylesheet" href="../../assets/css/layout.css">
+  <link rel="stylesheet" href="../../assets/css/components.css">
+</head>
+
+<body>
+  <main class="container" style="margin-top:2rem;">
+    <h1>Sample Project 1</h1>
+    <p>This is a tiny client-side demo using only vanilla JS.</p>
+    <button id="btn">Click me</button>
+    <pre id="log" aria-live="polite"></pre>
+  </main>
+  <script>
+    const next = s => ({ ...s, n: s.n + 1 });
+    const render = s => `Clicked ${s.n} times`;
+    let state = { n: 0 };
+    document.getElementById("btn").addEventListener("click", () => {
+      state = next(state);
+      document.getElementById("log").textContent = render(state);
+    });
+  </script>
+  <script type="module" src="../../assets/js/partials.js"></script>
+</body>
+
+</html>
