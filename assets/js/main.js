@@ -8,7 +8,29 @@ import { setYear } from "./accessibility.js";
 
 const app = qs("#app");
 const tocNav = qs("#toc-nav");
+const tocAside = qs("#toc");
+const tocToggle = qs("#toc-toggle");
 const yearNode = qs("#year");
+
+const closeToc = () => {
+  tocAside.classList.remove("open");
+  tocAside.setAttribute("aria-hidden", "true");
+  tocToggle.setAttribute("aria-expanded", "false");
+};
+
+const toggleToc = () => {
+  const open = tocAside.classList.toggle("open");
+  tocAside.setAttribute("aria-hidden", String(!open));
+  tocToggle.setAttribute("aria-expanded", String(open));
+};
+
+if (tocToggle) listen(tocToggle, "click", toggleToc);
+
+document.addEventListener("click", (e) => {
+  if (!tocAside.classList.contains("open")) return;
+  if (e.target.closest("#toc") || e.target.closest("#toc-toggle")) return;
+  closeToc();
+});
 
 setYear(yearNode);
 
@@ -51,6 +73,7 @@ listen(tocNav, "click", (e) => {
   const url = new URL(location.href);
   url.hash = id;
   history.replaceState(null, "", url);
+  closeToc();
 });
 
 const sectionIds = ["about", "social", "works"];

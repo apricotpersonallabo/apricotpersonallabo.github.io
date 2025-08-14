@@ -30,21 +30,39 @@
   .main-grid {
     grid-template-columns: 1fr;
   }
+}
 
-  .toc {
-    order: -1;
-  }
+.toc-toggle {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 201;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .5rem;
+  box-shadow: var(--shadow);
 }
 
 .toc {
-  position: sticky;
-  top: 4.5rem;
-  align-self: start;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 260px;
+  max-width: 80%;
+  transform: translateX(-110%);
+  transition: transform .3s;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1rem;
   background: var(--surface);
   box-shadow: var(--shadow);
+  z-index: 200;
+}
+
+.toc.open {
+  transform: translateX(0);
 }
 
 .toc nav a {
