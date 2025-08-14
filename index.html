@@ -13,12 +13,14 @@
   <body>
     <a class="skip-link" href="#about">Skip to content</a>
 
-    <div class="container main-grid">
-      <aside class="toc" aria-label="Table of contents">
-        <h2 id="toc-title">目次</h2>
-        <nav id="toc-nav"></nav>
-      </aside>
+    <button id="toc-toggle" class="toc-toggle" aria-label="Toggle table of contents" aria-controls="toc" aria-expanded="false">☰</button>
 
+    <aside id="toc" class="toc" aria-label="Table of contents" aria-hidden="true">
+      <h2 id="toc-title">目次</h2>
+      <nav id="toc-nav"></nav>
+    </aside>
+
+    <div class="container">
       <main id="app" class="content" role="main" tabindex="-1">
         <noscript>
           <p>This page needs JavaScript enabled.</p>
