@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="../../assets/css/base.css">
+    <link rel="stylesheet" href="../../assets/css/layout.css">
+    <link rel="stylesheet" href="../../assets/css/components.css">
+</head>
+
+<body>
+    <p>このページは、あなたのIPアドレスを表示するためのサンプルプロジェクトです。</p>
+    <p>以下にあなたのIPアドレスが表示されます:</p>
+
+    <h2>IPアドレス:</h2>
+    <p id="ip">取得中...</p>
+    <script>
+        fetch('https://api.ipify.org?format=json')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('ip').textContent = data.ip;
+            })
+            .catch(err => {
+                document.getElementById('ip').textContent = '取得に失敗しました';
+                console.error(err);
+            });
+    </script>
+    <script type="module" src="../../assets/js/partials.js"></script>
+</body>
+
+</html>
