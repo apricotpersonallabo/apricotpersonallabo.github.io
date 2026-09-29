@@ -162,7 +162,7 @@ function renderStatus() {
 }
 
 function setLanguage(language, persist = false) {
-  currentLanguage = language === 'ja' ? 'ja' : 'en';
+  currentLanguage = /^ja(?:[-_]|$)/i.test(language) ? 'ja' : 'en';
   document.documentElement.lang = currentLanguage;
   document.title = t('pageTitle');
   document.querySelector('meta[name="description"]').content = t('metaDescription');
@@ -186,9 +186,10 @@ languageButtons.forEach(button => {
   button.addEventListener('click', () => setLanguage(button.dataset.language, true));
 });
 
-let savedLanguage = 'en';
-try { savedLanguage = localStorage.getItem('language') || 'en'; } catch { /* Use English by default. */ }
-setLanguage(savedLanguage);
+let savedLanguage = null;
+try { savedLanguage = localStorage.getItem('language'); } catch { /* Use the browser language. */ }
+const browserLanguage = navigator.languages?.[0] || navigator.language || 'en';
+setLanguage(savedLanguage === 'en' || savedLanguage === 'ja' ? savedLanguage : browserLanguage);
 document.getElementById('year').textContent = new Date().getFullYear();
 
 async function loadProjects() {
